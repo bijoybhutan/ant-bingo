@@ -2,7 +2,6 @@
 header("Content-Type: application/json");
 require '../database/connection.php';
 
-// Fetch all called numbers
 $stmt = $pdo->query("SELECT number FROM called_numbers");
 $calledNumbers = $stmt->fetchAll(PDO::FETCH_COLUMN);
 
