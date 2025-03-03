@@ -37,7 +37,7 @@
         // Fetch Leaderboard Data
         async function fetchLeaderboard() {
             try {
-                const response = await fetch('http://localhost/bingo/api/leaderboard');
+                const response = await fetch('http://localhost/bingo/api/leaderboard.php');
                 const data = await response.json();
                 renderLeaderboard(data.leaderboard);
             } catch (error) {

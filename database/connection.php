@@ -3,7 +3,7 @@
 $host = 'localhost';
 $db   = 'bingo';
 $user = 'root';
-$pass = ''; // please update your default password
+$pass = 'root'; // please update your default password
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$db", $user, $pass);
