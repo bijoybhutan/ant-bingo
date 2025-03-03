@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bingo Game</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-100">
+    <div class="container mx-auto p-4">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">Bingo Game</h1>
+            <a href="leaderboard.html" class="text-blue-500 hover:text-blue-700">Leaderboard</a>
+        </div>
+
+        <div id="calledNumbersSection" class="mt-8 hidden">
+            <div id="calledNumbersList" class="flex flex-wrap gap-1 mb-2"></div>
+        </div>
+
+        <div id="registration" class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md mb-8 mt-4">
+            <form id="registrationForm">
+                <div class="mb-4">
+                    <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" id="name" name="name" class="mt-1 p-2 w-full border rounded-md"
+                        placeholder="Enter your name" required>
+                </div>
+                <button type="submit"
+                    class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600">Register</button>
+            </form>
+            <p id="errorMessage" class="mt-4 text-red-500 text-sm hidden"></p>
+        </div>
+
+        <div id="bingoSection" class="hidden">
+            <div id="bingoCard" class="grid grid-cols-5 gap-2 mb-4"></div>
+            <div class="flex gap-4">
+                <button onclick="generateCard()"
+                    class="w-1/2 bg-green-500 text-white p-2 rounded-md hover:bg-green-600">Generate Card</button>
+                <button onclick="callNumber()" id="numberCaller"
+                    class="w-1/2 bg-purple-500 text-white p-2 rounded-md hover:bg-purple-600 hidden">Call
+                    Next Number</button>
+            </div>
+            <div id="calledNumber" class="mt-2 text-xl text-center"></div>
+            <p id="bingoMessage" class="text-green-600 font-bold text-center hidden mt-4"></p>
+        </div>
+    </div>
+
+    <script>
+        let playerId = null;
+        let bingoCard = [];
+        let calledNumbers = [];
+        let markedNumbers = new Set();
+        let callButtonPresses = 0;
+        const FREE_SPACE_INDEX = 12; // The center FREE tile
+
+        function saveGameState() {
+            localStorage.setItem('bingoGameState', JSON.stringify({
+                playerId, bingoCard, calledNumbers, markedNumbers: Array.from(markedNumbers), callButtonPresses
+            }));
+        }
+
+        function restoreGameState() {
+            const savedState = localStorage.getItem('bingoGameState');
+            if (savedState) {
+                const gameState = JSON.parse(savedState);
+                playerId = gameState.playerId;
+                bingoCard = gameState.bingoCard;
+                calledNumbers = gameState.calledNumbers;
+                markedNumbers = new Set(gameState.markedNumbers);
+                callButtonPresses = gameState.callButtonPresses;
+            }
+        }
+
+        function updateCalledNumbersUI() {
+            const calledNumbersList = document.getElementById('calledNumbersList');
+            calledNumbersList.innerHTML = '';
+            calledNumbers.forEach(num => {
+                const numElement = document.createElement('div');
+                numElement.textContent = num;
+                numElement.className = 'p-1 bg-blue-500 text-white text-sm rounded-sm';
+                calledNumbersList.appendChild(numElement);
+            });
+
+            if (calledNumbers.length > 0) {
+                document.getElementById('calledNumbersSection').classList.remove('hidden');
+            }
+        }
+
+        document.getElementById('registrationForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = document.getElementById('name').value;
+            const errorMessage = document.getElementById('errorMessage');
+
+            try {
+                const response = await fetch('http://localhost/bingo/api/register-player.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await response.json();
+
+                if (data.error) {
+                    errorMessage.textContent = data.error;
+                    errorMessage.classList.remove('hidden');
+                } else {
+                    playerId = data.player_id;
+                    localStorage.setItem('playerId', playerId);
+
+                    document.getElementById('registration').classList.add('hidden');
+                    document.getElementById('bingoSection').classList.remove('hidden');
+                    document.getElementById('numberCaller').classList.remove('hidden');
+
+                    saveGameState();
+                }
+            } catch (error) {
+                console.error("Error during registration:", error);
+                errorMessage.textContent = "An error occurred. Please try again.";
+                errorMessage.classList.remove('hidden');
+            }
+        });
+
+        function generateCard() {
+                markedNumbers.clear();
+                bingoCard = Array.from({ length: 25 }, (_, i) => i === FREE_SPACE_INDEX ? "FREE" : Math.floor(Math.random() * 100) + 1);
+                markedNumbers.add("FREE");
+
+                calledNumbers = [];
+                callButtonPresses = 0;
+                document.getElementById('calledNumber').textContent = ""; 
+                document.getElementById('calledNumbersList').innerHTML = ""; 
+                document.getElementById('calledNumbersSection').classList.add('hidden');
+
+                resetGame();
+                renderCard();
+                saveGameState();
+            }
+        function renderCard() {
+            const cardElement = document.getElementById('bingoCard');
+            cardElement.innerHTML = bingoCard.map((num, index) => {
+                const isMarked = markedNumbers.has(num);
+                const isCalled = calledNumbers.includes(num) || num === "FREE"; 
+
+                const tileClass = `
+                p-4 border text-center 
+                ${num === "FREE" ? 'bg-red-500 font-bold text-black' : ''}
+                ${isMarked ? 'bg-green-200' : ''}
+                ${isCalled ? 'cursor-pointer hover:bg-yellow-200' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}
+            `;
+
+                return `<div class="${tileClass}" onclick="${isCalled ? `markNumber(${index})` : ''}">${num}</div>`;
+            }).join('');
+        }
+
+
+        function markNumber(index) {
+            const number = bingoCard[index];
+            if (!markedNumbers.has(number)) {
+                markedNumbers.add(number);
+                renderCard();
+                saveGameState();
+
+                if (bingoCard.every(num => markedNumbers.has(num))) {
+                    document.getElementById('bingoMessage').textContent = "BINGO! Score Saved!";
+                    document.getElementById('bingoMessage').classList.remove('hidden');
+                    saveScore();
+                }
+            }
+        }
+
+       async function callNumber() {
+            try {
+                const response = await fetch('http://localhost/bingo/api/call-number.php');
+                const data = await response.json();
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    callButtonPresses++;
+                    document.getElementById('calledNumber').textContent = `Last Called Number: ${data.number}`;
+                    calledNumbers.push(data.number);
+                    updateCalledNumbersUI();
+                    saveGameState();
+                    renderCard();
+                }
+            } catch (error) {
+                console.error("Error calling number:", error);
+                alert("An error occurred while calling the next number.");
+            }
+        }
+
+
+        function checkBingo() {
+            if (markedNumbers.size === 25) {
+                document.getElementById('bingoMessage').textContent = "BINGO! Score Saved!";
+                document.getElementById('bingoMessage').classList.remove('hidden');
+                saveScore();
+            }
+        }
+
+        async function saveScore() {
+            if (!playerId) return;
+
+            const score = Math.abs(100 - callButtonPresses);
+
+            try {
+                const response = await fetch('http://localhost/bingo/api/save-score.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ player_id: playerId, score: score })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    console.log("Score saved successfully!");
+                }
+            } catch (error) {
+                console.error("Error saving score:", error);
+            }
+        }
+
+        async function resetGame() {
+                if (!playerId) return;
+
+                try {
+                    const response = await fetch('http://localhost/bingo/api/reset-game.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        <!-- body: JSON.stringify({ player_id: playerId, score: 100 }) -->
+                    });
+                    const data = await response.json();
+                    if (data.success) {
+                        console.log("Numbers reseted!");
+                    }
+                } catch (error) {
+                    console.error("Error reseting:", error);
+                }
+            }
+
+        window.addEventListener('load', () => {
+            restoreGameState();
+            if (playerId) {
+                document.getElementById('registration').classList.add('hidden');
+                document.getElementById('bingoSection').classList.remove('hidden');
+                document.getElementById('numberCaller').classList.remove('hidden');
+                renderCard();
+                updateCalledNumbersUI();
+            }
+        });
+    </script>
+</body>
+
+</html>
